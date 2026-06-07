@@ -13,15 +13,10 @@ CREDIT          = "👨‍💻 Developer : RH .RATUL"
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-cookies_content = os.environ.get("YOUTUBE_COOKIES", "")
-if cookies_content:
-    with open("cookies.txt", "w") as f:
-        f.write(cookies_content)
-
 
 def download_video(url, output_path):
     ydl_opts = {
-        "format": "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best[height<=360]/best",
+        "format": "best[height<=360]/best[height<=480]/best",
         "outtmpl": output_path,
         "merge_output_format": "mp4",
         "ffmpeg_location": FFMPEG,
