@@ -1,14 +1,13 @@
 import os
 import re
-import asyncio
-import yt_dlp
+from pytubefix import YouTube
+from pytubefix.cli import on_progress
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_TOKEN")
 STORAGE_CHANNEL = os.environ.get("STORAGE_CHANNEL")
 DOWNLOAD_DIR    = "./downloads"
-COOKIES_FILE    = "cookies.txt"
 CREDIT          = "👨‍💻 Developer : RH .RATUL"
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -17,12 +16,9 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🎬 *RH Ratul Video Downloader*\n\n"
-        "যেকোনো ভিডিও লিংক পাঠান অথবা\n"
+        "যেকোনো YouTube লিংক পাঠান অথবা\n"
         "Notification forward করুন!\n\n"
-        "✅ YouTube\n"
-        "✅ Facebook\n"
-        "✅ TikTok\n"
-        "✅ Instagram\n\n"
+        "✅ YouTube\n\n"
         f"{CREDIT}",
         parse_mode="Markdown"
     )
@@ -30,7 +26,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def extract_url(message):
     urls = []
-
     text = message.text or message.caption or ""
     found = re.findall(r'https?://[^\s\)]+', text)
     urls.extend(found)
@@ -45,11 +40,7 @@ def extract_url(message):
             urls.append(text[start:end])
 
     for u in urls:
-        if any(x in u for x in ["youtube.com", "youtu.be", "facebook.com/watch", "fb.watch"]):
-            return u
-
-    for u in urls:
-        if any(x in u for x in ["tiktok.com", "instagram.com"]):
+        if any(x in u for x in ["youtube.com", "youtu.be"]):
             return u
 
     return urls[0] if urls else None
@@ -60,41 +51,36 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = extract_url(message)
 
     if not url:
-        await message.reply_text(
-            "⚠️ কোনো লিংক পাওয়া যায়নি।\n"
-            "ভিডিও লিংক বা Notification forward করুন।"
-        )
+        await message.reply_text("⚠️ কোনো লিংক পাওয়া যায়নি।")
         return
 
-    msg = await message.reply_text(
-        f"⏳ *ডাউনলোড হচ্ছে...*",
-        parse_mode="Markdown"
-    )
-
-    ydl_opts = {
-        "format"             : "best[height<=360]/best",
-        "outtmpl"            : f"{DOWNLOAD_DIR}/%(title)s.%(ext)s",
-        "noplaylist"         : True,
-        "quiet"              : True,
-        "merge_output_format": "mp4",
-        "cookiefile"         : COOKIES_FILE,
-    }
+    msg = await message.reply_text("⏳ *ডাউনলোড হচ্ছে...*", parse_mode="Markdown")
 
     filename = None
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info     = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            title    = info.get("title", "ভিডিও")
-            duration = info.get("duration", 0)
-            dur_str  = f"{duration//60}:{duration%60:02d}"
+        yt = YouTube(url, on_progress_callback=on_progress, use_oauth=False, allow_oauth_cache=True)
+        
+        # 360p stream খোঁজো
+        stream = yt.streams.filter(
+            progressive=True,
+            file_extension="mp4",
+            res="360p"
+        ).first()
+        
+        if not stream:
+            stream = yt.streams.filter(
+                progressive=True,
+                file_extension="mp4"
+            ).order_by("resolution").first()
 
-        size_mb = os.path.getsize(filename) / (1024 * 1024)
+        title    = yt.title
+        duration = yt.length
+        dur_str  = f"{duration//60}:{duration%60:02d}"
 
-        await msg.edit_text(
-            "📤 *আপলোড হচ্ছে...*",
-            parse_mode="Markdown"
-        )
+        filename = stream.download(output_path=DOWNLOAD_DIR)
+        size_mb  = os.path.getsize(filename) / (1024 * 1024)
+
+        await msg.edit_text("📤 *আপলোড হচ্ছে...*", parse_mode="Markdown")
 
         with open(filename, "rb") as vf:
             sent = await context.bot.send_video(
