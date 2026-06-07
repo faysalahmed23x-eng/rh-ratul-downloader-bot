@@ -46,17 +46,22 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await message.reply_text("⏳ *ডাউনলোড হচ্ছে...*", parse_mode="Markdown")
 
     ydl_opts = {
-        "format"             : "best[height<=360]/best",
-        "outtmpl"            : f"{DOWNLOAD_DIR}/%(title)s.%(ext)s",
-        "noplaylist"         : True,
-        "quiet"              : True,
-        "merge_output_format": "mp4",
-        "extractor_args"     : {
-            "youtube": {
-                "player_client": ["android_vr"],
-            }
-        },
-    }
+    "format"             : "best[height<=360]/best",
+    "outtmpl"            : f"{DOWNLOAD_DIR}/%(title)s.%(ext)s",
+    "noplaylist"         : True,
+    "quiet"              : True,
+    "merge_output_format": "mp4",
+    "extractor_args"     : {
+        "youtube": {
+            "player_client": ["web"],
+            "player_skip"  : ["webpage", "configs"],
+        }
+    },
+    "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    },
+    "cookiefile": "cookies.txt",
+}
 
     filename = None
     try:
