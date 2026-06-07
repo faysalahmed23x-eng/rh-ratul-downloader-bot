@@ -11,6 +11,16 @@ CREDIT          = "👨‍💻 Developer : RH .RATUL"
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
+# Cookies env থেকে file এ লেখো
+cookies_content = os.environ.get("YOUTUBE_COOKIES", "")
+if cookies_content:
+    with open("cookies.txt", "w") as f:
+        f.write(cookies_content)
+    COOKIES_FILE = "cookies.txt"
+else:
+    COOKIES_FILE = None
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🎬 *RH Ratul Video Downloader*\n\n"
@@ -19,6 +29,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{CREDIT}",
         parse_mode="Markdown"
     )
+
 
 def extract_url(message):
     urls = []
@@ -36,6 +47,7 @@ def extract_url(message):
             return u
     return urls[0] if urls else None
 
+
 async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     url = extract_url(message)
@@ -46,22 +58,18 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await message.reply_text("⏳ *ডাউনলোড হচ্ছে...*", parse_mode="Markdown")
 
     ydl_opts = {
-    "format"             : "best[height<=360]/best",
-    "outtmpl"            : f"{DOWNLOAD_DIR}/%(title)s.%(ext)s",
-    "noplaylist"         : True,
-    "quiet"              : True,
-    "merge_output_format": "mp4",
-    "extractor_args"     : {
-        "youtube": {
-            "player_client": ["web"],
-            "player_skip"  : ["webpage", "configs"],
-        }
-    },
-    "http_headers": {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-    },
-    "cookiefile": "cookies.txt",
-}
+        "format"             : "best[height<=360]/best",
+        "outtmpl"            : f"{DOWNLOAD_DIR}/%(title)s.%(ext)s",
+        "noplaylist"         : True,
+        "quiet"              : True,
+        "merge_output_format": "mp4",
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        },
+    }
+
+    if COOKIES_FILE:
+        ydl_opts["cookiefile"] = COOKIES_FILE
 
     filename = None
     try:
@@ -114,6 +122,7 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 os.remove(filename)
         except:
             pass
+
 
 def main():
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
