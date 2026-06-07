@@ -1,7 +1,6 @@
 import os
 import re
-from pytubefix import YouTube
-from pytubefix.cli import on_progress
+import yt_dlp
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -12,74 +11,63 @@ CREDIT          = "👨‍💻 Developer : RH .RATUL"
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🎬 *RH Ratul Video Downloader*\n\n"
         "যেকোনো YouTube লিংক পাঠান অথবা\n"
         "Notification forward করুন!\n\n"
-        "✅ YouTube\n\n"
         f"{CREDIT}",
         parse_mode="Markdown"
     )
-
 
 def extract_url(message):
     urls = []
     text = message.text or message.caption or ""
     found = re.findall(r'https?://[^\s\)]+', text)
     urls.extend(found)
-
     entities = message.entities or message.caption_entities or []
     for entity in entities:
         if entity.type == "text_link":
             urls.append(entity.url)
         elif entity.type == "url":
-            start = entity.offset
-            end   = entity.offset + entity.length
-            urls.append(text[start:end])
-
+            urls.append(text[entity.offset:entity.offset + entity.length])
     for u in urls:
         if any(x in u for x in ["youtube.com", "youtu.be"]):
             return u
-
     return urls[0] if urls else None
-
 
 async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     url = extract_url(message)
-
     if not url:
         await message.reply_text("⚠️ কোনো লিংক পাওয়া যায়নি।")
         return
 
     msg = await message.reply_text("⏳ *ডাউনলোড হচ্ছে...*", parse_mode="Markdown")
 
+    ydl_opts = {
+        "format"             : "best[height<=360]/best",
+        "outtmpl"            : f"{DOWNLOAD_DIR}/%(title)s.%(ext)s",
+        "noplaylist"         : True,
+        "quiet"              : True,
+        "merge_output_format": "mp4",
+        "extractor_args"     : {
+            "youtube": {
+                "player_client": ["android_vr"],
+            }
+        },
+    }
+
     filename = None
     try:
-        yt = YouTube(url, on_progress_callback=on_progress, use_oauth=False, allow_oauth_cache=True)
-        
-        # 360p stream খোঁজো
-        stream = yt.streams.filter(
-            progressive=True,
-            file_extension="mp4",
-            res="360p"
-        ).first()
-        
-        if not stream:
-            stream = yt.streams.filter(
-                progressive=True,
-                file_extension="mp4"
-            ).order_by("resolution").first()
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info     = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            title    = info.get("title", "ভিডিও")
+            duration = info.get("duration", 0)
+            dur_str  = f"{duration//60}:{duration%60:02d}"
 
-        title    = yt.title
-        duration = yt.length
-        dur_str  = f"{duration//60}:{duration%60:02d}"
-
-        filename = stream.download(output_path=DOWNLOAD_DIR)
-        size_mb  = os.path.getsize(filename) / (1024 * 1024)
-
+        size_mb = os.path.getsize(filename) / (1024 * 1024)
         await msg.edit_text("📤 *আপলোড হচ্ছে...*", parse_mode="Markdown")
 
         with open(filename, "rb") as vf:
@@ -122,13 +110,11 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-
 def main():
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print("  Downloader Bot চালু হয়েছে")
     print("  Developer : RH .RATUL")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(
@@ -136,7 +122,6 @@ def main():
         download_video
     ))
     app.run_polling(drop_pending_updates=True)
-
 
 if __name__ == "__main__":
     main()
