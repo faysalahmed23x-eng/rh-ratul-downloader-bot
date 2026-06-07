@@ -1,9 +1,11 @@
 import os
 import re
 import yt_dlp
+import imageio_ffmpeg
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
+FFMPEG          = imageio_ffmpeg.get_ffmpeg_exe()
 TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_TOKEN")
 STORAGE_CHANNEL = os.environ.get("STORAGE_CHANNEL")
 DOWNLOAD_DIR    = "./downloads"
@@ -11,24 +13,41 @@ CREDIT          = "👨‍💻 Developer : RH .RATUL"
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# Cookies env থেকে file এ লেখো
 cookies_content = os.environ.get("YOUTUBE_COOKIES", "")
 if cookies_content:
     with open("cookies.txt", "w") as f:
         f.write(cookies_content)
-    COOKIES_FILE = "cookies.txt"
-else:
-    COOKIES_FILE = None
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🎬 *RH Ratul Video Downloader*\n\n"
-        "যেকোনো YouTube লিংক পাঠান অথবা\n"
-        "Notification forward করুন!\n\n"
-        f"{CREDIT}",
-        parse_mode="Markdown"
-    )
+def download_video(url, output_path):
+    ydl_opts = {
+        "format": "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best[height<=360]/best",
+        "outtmpl": output_path,
+        "merge_output_format": "mp4",
+        "ffmpeg_location": FFMPEG,
+        "quiet": True,
+        "no_warnings": True,
+        "geo_bypass": True,
+        "geo_bypass_country": "US",
+        "cookiefile": "cookies.txt" if os.path.exists("cookies.txt") else None,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "android_vr", "web", "mweb"],
+            }
+        },
+        "retries": 5,
+        "fragment_retries": 5,
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        fname = ydl.prepare_filename(info)
+        for ext in [".webm", ".mkv"]:
+            fname = fname.replace(ext, ".mp4")
+        return fname, info
 
 
 def extract_url(message):
@@ -48,7 +67,17 @@ def extract_url(message):
     return urls[0] if urls else None
 
 
-async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🎬 *RH Ratul Video Downloader*\n\n"
+        "যেকোনো YouTube লিংক পাঠান অথবা\n"
+        "Notification forward করুন!\n\n"
+        f"{CREDIT}",
+        parse_mode="Markdown"
+    )
+
+
+async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     url = extract_url(message)
     if not url:
@@ -56,31 +85,16 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     msg = await message.reply_text("⏳ *ডাউনলোড হচ্ছে...*", parse_mode="Markdown")
+    uid = str(message.chat_id)
+    raw = f"{DOWNLOAD_DIR}/{uid}_raw.mp4"
 
-    ydl_opts = {
-        "format"             : "best[height<=360]/best",
-        "outtmpl"            : f"{DOWNLOAD_DIR}/%(title)s.%(ext)s",
-        "noplaylist"         : True,
-        "quiet"              : True,
-        "merge_output_format": "mp4",
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-        },
-    }
-
-    if COOKIES_FILE:
-        ydl_opts["cookiefile"] = COOKIES_FILE
-
-    filename = None
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info     = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            title    = info.get("title", "ভিডিও")
-            duration = info.get("duration", 0)
-            dur_str  = f"{duration//60}:{duration%60:02d}"
+        filename, info = download_video(url, raw)
+        title    = info.get("title", "ভিডিও")
+        duration = info.get("duration", 0)
+        dur_str  = f"{duration//60}:{duration%60:02d}"
+        size_mb  = os.path.getsize(filename) / (1024 * 1024)
 
-        size_mb = os.path.getsize(filename) / (1024 * 1024)
         await msg.edit_text("📤 *আপলোড হচ্ছে...*", parse_mode="Markdown")
 
         with open(filename, "rb") as vf:
@@ -106,7 +120,7 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📺 Quality  : 360p\n"
             f"📦 Size     : {size_mb:.1f} MB\n"
             f"━━━━━━━━━━━━━━━━━━\n"
-            f"[▶️ এখানে দেখুন / ডাউনলোড করুন]({video_link})\n\n"
+            f"[▶️ দেখুন / ডাউনলোড করুন]({video_link})\n\n"
             f"{CREDIT}",
             parse_mode="Markdown"
         )
@@ -118,8 +132,8 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     finally:
         try:
-            if filename and os.path.exists(filename):
-                os.remove(filename)
+            if os.path.exists(raw):
+                os.remove(raw)
         except:
             pass
 
@@ -133,9 +147,10 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(
         (filters.TEXT | filters.CAPTION) & ~filters.COMMAND,
-        download_video
+        download_handler
     ))
     app.run_polling(drop_pending_updates=True)
+
 
 if __name__ == "__main__":
     main()
