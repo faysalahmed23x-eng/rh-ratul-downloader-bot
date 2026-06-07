@@ -27,38 +27,55 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+def extract_url(message):
+    """Message থেকে সব উপায়ে URL বের করো"""
+    urls = []
+
+    # ১. Plain text থেকে URL
+    text = message.text or message.caption or ""
+    found = re.findall(r'https?://[^\s\)]+', text)
+    urls.extend(found)
+
+    # ২. Message entities থেকে URL (clickable links)
+    entities = message.entities or message.caption_entities or []
+    for entity in entities:
+        if entity.type == "text_link":
+            urls.append(entity.url)
+        elif entity.type == "url":
+            start = entity.offset
+            end   = entity.offset + entity.length
+            urls.append(text[start:end])
+
+    # ৩. Forward হওয়া message এর caption entities
+    if message.forward_origin:
+        pass
+
+    # YouTube/Facebook link আগে নাও
+    for u in urls:
+        if any(x in u for x in ["youtube.com", "youtu.be", "facebook.com/watch", "fb.watch"]):
+            return u
+
+    # অন্য যেকোনো link
+    for u in urls:
+        if any(x in u for x in ["tiktok.com", "instagram.com"]):
+            return u
+
+    return urls[0] if urls else None
+
+
 async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
+    url = extract_url(message)
 
-    # Text বা Caption থেকে content নাও
-    text = ""
-    if message.text:
-        text = message.text.strip()
-    elif message.caption:
-        text = message.caption.strip()
-
-    # Text থেকে সব link বের করো
-    urls = re.findall(r'https?://[^\s\)]+', text)
-
-    if not urls:
+    if not url:
         await message.reply_text(
             "⚠️ কোনো লিংক পাওয়া যায়নি।\n"
             "ভিডিও লিংক বা Notification forward করুন।"
         )
         return
 
-    # YouTube/Facebook/TikTok/Instagram link খোঁজো
-    url = None
-    for u in urls:
-        if any(x in u for x in ["youtube.com", "youtu.be", "facebook.com", "tiktok.com", "instagram.com"]):
-            url = u
-            break
-
-    if not url:
-        url = urls[0]
-
     msg = await message.reply_text(
-        "⏳ *ডাউনলোড হচ্ছে... অপেক্ষা করুন*",
+        f"⏳ *ডাউনলোড হচ্ছে...*\n`{url[:50]}...`",
         parse_mode="Markdown"
     )
 
@@ -82,7 +99,7 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         size_mb = os.path.getsize(filename) / (1024 * 1024)
 
         await msg.edit_text(
-            "📤 *আপলোড হচ্ছে... একটু অপেক্ষা করুন*",
+            "📤 *আপলোড হচ্ছে...*",
             parse_mode="Markdown"
         )
 
