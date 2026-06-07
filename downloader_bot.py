@@ -8,6 +8,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_TOKEN")
 STORAGE_CHANNEL = os.environ.get("STORAGE_CHANNEL")
 DOWNLOAD_DIR    = "./downloads"
+COOKIES_FILE    = "cookies.txt"
 CREDIT          = "👨‍💻 Developer : RH .RATUL"
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -28,15 +29,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def extract_url(message):
-    """Message থেকে সব উপায়ে URL বের করো"""
     urls = []
 
-    # ১. Plain text থেকে URL
     text = message.text or message.caption or ""
     found = re.findall(r'https?://[^\s\)]+', text)
     urls.extend(found)
 
-    # ২. Message entities থেকে URL (clickable links)
     entities = message.entities or message.caption_entities or []
     for entity in entities:
         if entity.type == "text_link":
@@ -46,16 +44,10 @@ def extract_url(message):
             end   = entity.offset + entity.length
             urls.append(text[start:end])
 
-    # ৩. Forward হওয়া message এর caption entities
-    if message.forward_origin:
-        pass
-
-    # YouTube/Facebook link আগে নাও
     for u in urls:
         if any(x in u for x in ["youtube.com", "youtu.be", "facebook.com/watch", "fb.watch"]):
             return u
 
-    # অন্য যেকোনো link
     for u in urls:
         if any(x in u for x in ["tiktok.com", "instagram.com"]):
             return u
@@ -75,7 +67,7 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     msg = await message.reply_text(
-        f"⏳ *ডাউনলোড হচ্ছে...*\n`{url[:50]}...`",
+        f"⏳ *ডাউনলোড হচ্ছে...*",
         parse_mode="Markdown"
     )
 
@@ -85,6 +77,7 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "noplaylist"         : True,
         "quiet"              : True,
         "merge_output_format": "mp4",
+        "cookiefile"         : COOKIES_FILE,
     }
 
     filename = None
