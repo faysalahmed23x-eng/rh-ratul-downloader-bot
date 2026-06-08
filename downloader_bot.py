@@ -16,15 +16,13 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 def download_video(url, output_path):
     ydl_opts = {
-        "format": "best",
-        "outtmpl": output_path,
-        "merge_output_format": "mp4",
-        "ffmpeg_location": FFMPEG,
-        "quiet": True,
-        "no_warnings": True,
-        "geo_bypass": True,
-        "geo_bypass_country": "US",
-        "cookiefile": "cookies.txt" if os.path.exists("cookies.txt") else None,
+    "format"             : "best[height<=480]/best[height<=360]/best",
+    "outtmpl"            : f"{DOWNLOAD_DIR}/%(title)s.%(ext)s",
+    "noplaylist"         : True,
+    "quiet"              : True,
+    "merge_output_format": "mp4",
+    "cookiefile"         : COOKIES_FILE,
+}"cookies.txt" if os.path.exists("cookies.txt") else None,
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
