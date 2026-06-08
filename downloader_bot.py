@@ -60,7 +60,7 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await message.reply_text("⏳ *ডাউনলোড হচ্ছে...*", parse_mode="Markdown")
 
     ydl_opts = {
-        "format"             : "best[height<=480]/best[height<=360]/best",
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best",
         "outtmpl"            : f"{DOWNLOAD_DIR}/%(title)s.%(ext)s",
         "noplaylist"         : True,
         "quiet"              : True,
