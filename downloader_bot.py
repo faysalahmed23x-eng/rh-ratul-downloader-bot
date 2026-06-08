@@ -1,20 +1,31 @@
 import os
 import re
 import math
+import asyncio
 import subprocess
 import yt_dlp
 import imageio_ffmpeg
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from pyrogram import Client
 
 TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_TOKEN")
 STORAGE_CHANNEL = os.environ.get("STORAGE_CHANNEL")
+API_ID          = int(os.environ.get("API_ID"))
+API_HASH        = os.environ.get("API_HASH")
 DOWNLOAD_DIR    = "./downloads"
 CREDIT          = "👨‍💻 Developer : RH .RATUL"
-MAX_FILE_MB     = 1900
 FFMPEG          = imageio_ffmpeg.get_ffmpeg_exe()
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+# Pyrogram client
+pyro = Client(
+    "rh_ratul_session",
+    api_id   = API_ID,
+    api_hash = API_HASH,
+    bot_token= TELEGRAM_TOKEN,
+)
 
 
 def download_video(url, output_path):
@@ -32,8 +43,8 @@ def download_video(url, output_path):
                 "player_client": ["android"],
             }
         },
-        "retries"            : 5,
-        "fragment_retries"   : 5,
+        "retries"          : 5,
+        "fragment_retries" : 5,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info  = ydl.extract_info(url, download=True)
@@ -41,39 +52,6 @@ def download_video(url, output_path):
         for ext in [".webm", ".mkv"]:
             fname = fname.replace(ext, ".mp4")
         return fname, info
-
-
-def get_duration(path):
-    result = subprocess.run(
-        [FFMPEG, '-i', path],
-        capture_output=True, text=True
-    )
-    m = re.search(r'Duration: (\d+):(\d+):(\d+\.?\d*)', result.stderr)
-    if m:
-        return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
-    return 0
-
-
-def split_video(inp, max_mb=MAX_FILE_MB):
-    size_mb = os.path.getsize(inp) / (1024 * 1024)
-    if size_mb <= max_mb:
-        return [inp]
-    total    = get_duration(inp)
-    n        = math.ceil(size_mb / max_mb)
-    part_dur = total / n
-    parts    = []
-    base     = inp.replace('.mp4', '')
-    for i in range(n):
-        p = f"{base}_part{i+1}.mp4"
-        subprocess.run([
-            FFMPEG, '-i', inp,
-            '-ss', str(i * part_dur),
-            '-t', str(part_dur),
-            '-c', 'copy', '-y', p
-        ], capture_output=True)
-        if os.path.exists(p):
-            parts.append(p)
-    return parts if parts else [inp]
 
 
 def cleanup(*paths):
@@ -136,58 +114,42 @@ async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         dur_str  = f"{duration//60}:{duration%60:02d}"
         size_mb  = os.path.getsize(filename) / (1024 * 1024)
 
-        await msg.edit_text("📦 *প্রস্তুত করছি...*", parse_mode="Markdown")
-        parts = split_video(filename)
-        total = len(parts)
+        await msg.edit_text("📤 *আপলোড হচ্ছে...*", parse_mode="Markdown")
 
-        for i, part in enumerate(parts, 1):
-            await msg.edit_text(
-                f"📤 *আপলোড হচ্ছে... Part {i}/{total}*",
-                parse_mode="Markdown"
-            )
-            with open(part, "rb") as vf:
-                sent = await context.bot.send_video(
-                    chat_id            = STORAGE_CHANNEL,
-                    video              = vf,
-                    caption            = (
-                        f"🎬 *{title}*\n"
-                        f"⏱️ {dur_str} | 📺 360p | 📦 {size_mb:.1f} MB\n"
-                        f"Part {i}/{total}\n"
-                        f"{CREDIT}"
-                    ),
-                    parse_mode         = "Markdown",
-                    supports_streaming = True,
-                )
-
-            video_link = f"https://t.me/c/{str(STORAGE_CHANNEL).replace('-100', '')}/{sent.message_id}"
-
-            await message.reply_text(
-                f"✅ *Part {i}/{total} সম্পন্ন!*\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"🎬 *{title}*\n"
-                f"⏱️ Duration : {dur_str}\n"
-                f"📺 Quality  : 360p\n"
-                f"📦 Size     : {size_mb:.1f} MB\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"[▶️ এখানে দেখুন / ডাউনলোড করুন]({video_link})\n\n"
-                f"{CREDIT}",
-                parse_mode="Markdown"
+        # Pyrogram দিয়ে channel এ upload করো
+        async with pyro:
+            sent = await pyro.send_video(
+                chat_id          = int(STORAGE_CHANNEL),
+                video            = filename,
+                caption          = (
+                    f"🎬 *{title}*\n"
+                    f"⏱️ {dur_str} | 📺 360p | 📦 {size_mb:.1f} MB\n"
+                    f"{CREDIT}"
+                ),
+                supports_streaming = True,
             )
 
-        await msg.delete()
+        channel_id = str(STORAGE_CHANNEL).replace("-100", "")
+        video_link = f"https://t.me/c/{channel_id}/{sent.id}"
+
+        await msg.edit_text(
+            f"✅ *ডাউনলোড সম্পন্ন!*\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🎬 *{title}*\n"
+            f"⏱️ Duration : {dur_str}\n"
+            f"📺 Quality  : 360p\n"
+            f"📦 Size     : {size_mb:.1f} MB\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"[▶️ এখানে দেখুন / ডাউনলোড করুন]({video_link})\n\n"
+            f"{CREDIT}",
+            parse_mode="Markdown"
+        )
 
     except Exception as e:
-        err = str(e)
-        if "Requested format is not available" in err:
-            await msg.edit_text(
-                f"❌ *Format পাওয়া যাচ্ছে না!*\n\nকিছুক্ষণ পরে আবার চেষ্টা করুন।\n\n{CREDIT}",
-                parse_mode="Markdown"
-            )
-        else:
-            await msg.edit_text(
-                f"❌ *ডাউনলোড ব্যর্থ!*\n\n`{err[:200]}`\n\n{CREDIT}",
-                parse_mode="Markdown"
-            )
+        await msg.edit_text(
+            f"❌ *ডাউনলোড ব্যর্থ!*\n\n`{str(e)[:200]}`\n\n{CREDIT}",
+            parse_mode="Markdown"
+        )
     finally:
         cleanup(raw)
 
