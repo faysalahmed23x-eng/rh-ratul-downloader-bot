@@ -1,8 +1,5 @@
 import os
 import re
-import math
-import asyncio
-import subprocess
 import yt_dlp
 import imageio_ffmpeg
 from telegram import Update
@@ -18,13 +15,6 @@ CREDIT          = "👨‍💻 Developer : RH .RATUL"
 FFMPEG          = imageio_ffmpeg.get_ffmpeg_exe()
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-
-pyro = Client(
-    "rh_ratul_session",
-    api_id    = API_ID,
-    api_hash  = API_HASH,
-    bot_token = TELEGRAM_TOKEN,
-)
 
 
 def download_video(url, output_path):
@@ -120,12 +110,19 @@ async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await msg.edit_text("📤 *আপলোড হচ্ছে...*", parse_mode="Markdown")
 
+        pyro = Client(
+            "rh_ratul_session",
+            api_id    = API_ID,
+            api_hash  = API_HASH,
+            bot_token = TELEGRAM_TOKEN,
+        )
+
         async with pyro:
             sent = await pyro.send_video(
                 chat_id            = STORAGE_CHANNEL,
                 video              = filename,
                 caption            = (
-                    f"🎬 *{title}*\n"
+                    f"🎬 **{title}**\n"
                     f"⏱️ {dur_str} | 📺 360p | 📦 {size_mb:.1f} MB\n"
                     f"{CREDIT}"
                 ),
