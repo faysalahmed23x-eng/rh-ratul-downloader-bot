@@ -127,8 +127,8 @@ async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 supports_streaming = True,
             )
 
-        channel_id = str(STORAGE_CHANNEL).replace("-100", "")
-        video_link = f"https://t.me/c/{channel_id}/{sent.id}"
+        
+        video_link = f"https://t.me/rh_ratul_storage/{sent.id}"
 
         await msg.edit_text(
             f"✅ *ডাউনলোড সম্পন্ন!*\n"
