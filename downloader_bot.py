@@ -10,7 +10,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from pyrogram import Client
 
 TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_TOKEN")
-STORAGE_CHANNEL = os.environ.get("STORAGE_CHANNEL")
+STORAGE_CHANNEL = int(os.environ.get("STORAGE_CHANNEL"))
 API_ID          = int(os.environ.get("API_ID"))
 API_HASH        = os.environ.get("API_HASH")
 DOWNLOAD_DIR    = "./downloads"
@@ -19,12 +19,11 @@ FFMPEG          = imageio_ffmpeg.get_ffmpeg_exe()
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# Pyrogram client
 pyro = Client(
     "rh_ratul_session",
-    api_id   = API_ID,
-    api_hash = API_HASH,
-    bot_token= TELEGRAM_TOKEN,
+    api_id    = API_ID,
+    api_hash  = API_HASH,
+    bot_token = TELEGRAM_TOKEN,
 )
 
 
@@ -37,10 +36,10 @@ def download_video(url, output_path):
         "quiet"              : True,
         "no_warnings"        : True,
         "geo_bypass"         : True,
-        "geo_bypass_country" : "BD",
+        "geo_bypass_country" : "US",
         "extractor_args"     : {
             "youtube": {
-                "player_client": ["android"],
+                "player_client": ["android", "android_vr", "web", "mweb"],
             }
         },
         "retries"          : 5,
@@ -77,6 +76,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def extract_url(message):
+    if message is None:
+        return None
     urls = []
     text = message.text or message.caption or ""
     found = re.findall(r'https?://[^\s\)]+', text)
@@ -96,6 +97,9 @@ def extract_url(message):
 
 
 async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+
     message = update.message
     url     = extract_url(message)
 
@@ -116,12 +120,11 @@ async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await msg.edit_text("📤 *আপলোড হচ্ছে...*", parse_mode="Markdown")
 
-        # Pyrogram দিয়ে channel এ upload করো
         async with pyro:
             sent = await pyro.send_video(
-                chat_id          = int(STORAGE_CHANNEL),
-                video            = filename,
-                caption          = (
+                chat_id            = STORAGE_CHANNEL,
+                video              = filename,
+                caption            = (
                     f"🎬 *{title}*\n"
                     f"⏱️ {dur_str} | 📺 360p | 📦 {size_mb:.1f} MB\n"
                     f"{CREDIT}"
