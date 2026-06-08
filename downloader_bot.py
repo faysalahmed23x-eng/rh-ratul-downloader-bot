@@ -19,17 +19,15 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 def download_video(url, output_path):
     ydl_opts = {
-        "format"             : "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best[height<=360]/best",
+        "format"             : "18/best[height<=360]/best",
         "outtmpl"            : output_path,
         "merge_output_format": "mp4",
         "ffmpeg_location"    : FFMPEG,
         "quiet"              : True,
         "no_warnings"        : True,
-        "geo_bypass"         : True,
-        "geo_bypass_country" : "US",
         "extractor_args"     : {
             "youtube": {
-                "player_client": ["android", "android_vr", "web", "mweb"],
+                "player_client": ["android"],
             }
         },
         "retries"          : 5,
