@@ -10,7 +10,6 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_TOKEN")
 STORAGE_CHANNEL = os.environ.get("STORAGE_CHANNEL")
 DOWNLOAD_DIR    = "./downloads"
-COOKIES_FILE    = "cookies.txt"
 CREDIT          = "👨‍💻 Developer : RH .RATUL"
 MAX_FILE_MB     = 1900
 FFMPEG          = imageio_ffmpeg.get_ffmpeg_exe()
@@ -28,14 +27,9 @@ def download_video(url, output_path):
         "no_warnings"        : True,
         "geo_bypass"         : True,
         "geo_bypass_country" : "BD",
-        "cookiefile"         : COOKIES_FILE if os.path.exists(COOKIES_FILE) else None,
-        "http_headers"       : {
-            "User-Agent"     : "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
-        },
         "extractor_args"     : {
             "youtube": {
-                "player_client": ["android", "android_vr", "web", "mweb"],
+                "player_client": ["android"],
             }
         },
         "retries"            : 5,
@@ -50,7 +44,10 @@ def download_video(url, output_path):
 
 
 def get_duration(path):
-    result = subprocess.run([FFMPEG, '-i', path], capture_output=True, text=True)
+    result = subprocess.run(
+        [FFMPEG, '-i', path],
+        capture_output=True, text=True
+    )
     m = re.search(r'Duration: (\d+):(\d+):(\d+\.?\d*)', result.stderr)
     if m:
         return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
@@ -61,11 +58,11 @@ def split_video(inp, max_mb=MAX_FILE_MB):
     size_mb = os.path.getsize(inp) / (1024 * 1024)
     if size_mb <= max_mb:
         return [inp]
-    total = get_duration(inp)
-    n     = math.ceil(size_mb / max_mb)
+    total    = get_duration(inp)
+    n        = math.ceil(size_mb / max_mb)
     part_dur = total / n
-    parts = []
-    base  = inp.replace('.mp4', '')
+    parts    = []
+    base     = inp.replace('.mp4', '')
     for i in range(n):
         p = f"{base}_part{i+1}.mp4"
         subprocess.run([
@@ -120,9 +117,9 @@ def extract_url(message):
     return urls[0] if urls else None
 
 
-async def download_video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
-    url = extract_url(message)
+    url     = extract_url(message)
 
     if not url:
         await message.reply_text("⚠️ কোনো লিংক পাওয়া যায়নি।")
@@ -193,8 +190,6 @@ async def download_video_handler(update: Update, context: ContextTypes.DEFAULT_T
             )
     finally:
         cleanup(raw)
-        for part in split_video.__globals__.get('_parts', []):
-            cleanup(part)
 
 
 def main():
@@ -207,7 +202,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(
         (filters.TEXT | filters.CAPTION) & ~filters.COMMAND,
-        download_video_handler
+        download_handler
     ))
     app.run_polling(drop_pending_updates=True)
 
