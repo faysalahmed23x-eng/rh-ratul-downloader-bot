@@ -1,5 +1,6 @@
 import os
 import re
+import random
 import yt_dlp
 import imageio_ffmpeg
 from telegram import Update
@@ -7,17 +8,41 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from pyrogram import Client
 
 TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_TOKEN")
-STORAGE_CHANNEL = int(os.environ.get("STORAGE_CHANNEL"))
+STORAGE_CHANNEL = "@rh_ratul_storage"
 API_ID          = int(os.environ.get("API_ID"))
 API_HASH        = os.environ.get("API_HASH")
 DOWNLOAD_DIR    = "./downloads"
 CREDIT          = "👨‍💻 Developer : RH .RATUL"
 FFMPEG          = imageio_ffmpeg.get_ffmpeg_exe()
+PROXIES_FILE    = "proxies.txt"
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 
+def load_proxies():
+    try:
+        with open(PROXIES_FILE) as f:
+            lines = [l.strip() for l in f if l.strip()]
+        proxies = []
+        for line in lines:
+            parts = line.split(":")
+            if len(parts) == 4:
+                ip, port, user, pwd = parts
+                proxies.append(f"http://{user}:{pwd}@{ip}:{port}")
+        return proxies
+    except:
+        return []
+
+
+def get_random_proxy():
+    proxies = load_proxies()
+    if proxies:
+        return random.choice(proxies)
+    return None
+
+
 def download_video(url, output_path):
+    proxy = get_random_proxy()
     ydl_opts = {
         "format"             : "18/best[height<=360]/best",
         "outtmpl"            : output_path,
@@ -33,6 +58,10 @@ def download_video(url, output_path):
         "retries"          : 5,
         "fragment_retries" : 5,
     }
+    if proxy:
+        ydl_opts["proxy"] = proxy
+        print(f"🔄 Proxy ব্যবহার হচ্ছে: {proxy.split('@')[1]}")
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info  = ydl.extract_info(url, download=True)
         fname = ydl.prepare_filename(info)
@@ -117,7 +146,7 @@ async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         async with pyro:
             sent = await pyro.send_video(
-                chat_id            = "@rh_ratul_storage",
+                chat_id            = STORAGE_CHANNEL,
                 video              = filename,
                 caption            = (
                     f"🎬 **{title}**\n"
@@ -127,7 +156,6 @@ async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 supports_streaming = True,
             )
 
-        
         video_link = f"https://t.me/rh_ratul_storage/{sent.id}"
 
         await msg.edit_text(
